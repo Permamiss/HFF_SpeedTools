@@ -1,0 +1,15 @@
+D:\charl\Documents\Projects\HFF_Speedometer\HFF_Speedometer\bin\Debug\HFF_Speedometer.dll.config
+D:\charl\Documents\Projects\HFF_Speedometer\HFF_Speedometer\bin\Debug\HFF_Speedometer.dll
+D:\charl\Documents\Projects\HFF_Speedometer\HFF_Speedometer\bin\Debug\HFF_Speedometer.pdb
+D:\charl\Documents\Projects\HFF_Speedometer\HFF_Speedometer\bin\Debug\Assembly-CSharp-firstpass.dll
+D:\charl\Documents\Projects\HFF_Speedometer\HFF_Speedometer\bin\Debug\Assembly-CSharp.dll
+D:\charl\Documents\Projects\HFF_Speedometer\HFF_Speedometer\bin\Debug\Mono.Security.dll
+D:\charl\Documents\Projects\HFF_Speedometer\HFF_Speedometer\bin\Debug\UnityEngine.Analytics.dll
+D:\charl\Documents\Projects\HFF_Speedometer\HFF_Speedometer\bin\Debug\UnityEngine.dll
+D:\charl\Documents\Projects\HFF_Speedometer\HFF_Speedometer\bin\Debug\UnityEngine.Networking.dll
+D:\charl\Documents\Projects\HFF_Speedometer\HFF_Speedometer\bin\Debug\UnityEngine.UI.dll
+D:\charl\Documents\Projects\HFF_Speedometer\HFF_Speedometer\bin\Debug\ArabicSupport.dll
+D:\charl\Documents\Projects\HFF_Speedometer\HFF_Speedometer\bin\Debug\UnityEngine.xml
+D:\charl\Documents\Projects\HFF_Speedometer\HFF_Speedometer\obj\Debug\HFF_Speedometer.dll
+D:\charl\Documents\Projects\HFF_Speedometer\HFF_Speedometer\obj\Debug\HFF_Speedometer.pdb
+D:\charl\Documents\Projects\HFF_Speedometer\HFF_Speedometer\obj\Debug\HFF_Speedometer.csprojResolveAssemblyReference.cache
