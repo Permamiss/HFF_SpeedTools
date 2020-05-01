@@ -117,10 +117,12 @@ namespace HFF_SpeedTools
                 string.Format("1) Toggle Speedometer [{0}]\n" +
                 "2) Toggle End-Zone Visual [{1}]\n" +
                 "3) Change Speedometer text color\n" +
-                "4) Reset Speedometer\n", this.renderSpeed ? "ENABLED" : "DISABLED", this.renderEndZone ? "ENABLED" : "DISABLED") +
-                "5) Toggle Checkpoint number" +
+                "4) Reset Speedometer\n" +
+                "5) Toggle Checkpoint number display" +
+				"6) Toggle firework launcher [{2}]", this.renderSpeed ? "ENABLED" : "DISABLED", this.renderEndZone ? "ENABLED" : "DISABLED", (Fireworks.instance && Fireworks.instance.enableWeapons) ? "ENABLED" : "DISABLED") +
 
-                "\n" +
+
+				"\n" +
                 "0) Exit";
         }
 
@@ -437,6 +439,17 @@ namespace HFF_SpeedTools
                     this.renderCpNum = !this.renderCpNum;
                     RefreshMenuMessage();
                 }
+				if (Input.GetKeyDown(KeyCode.Alpha6))
+				{
+					if (Fireworks.instance == null && FindObjectOfType<Fireworks>())
+						Fireworks.instance = FindObjectOfType<Fireworks>();
+
+					if (Fireworks.instance != null)
+					{
+						Fireworks.instance.enableWeapons = !Fireworks.instance.enableWeapons;
+						DebugMessage(string.Format("Attempted to turn Fireworks {0}", Fireworks.instance.enableWeapons ? "on" : "off"));
+					}
+				}
 				if (Input.GetKeyDown(KeyCode.Backspace))
 				{
 					QualitySettings.vSyncCount = 0;
@@ -444,6 +457,7 @@ namespace HFF_SpeedTools
 					{
 						case 0:
 							Application.targetFrameRate = 1;
+							break;
 						case 1:
 							Application.targetFrameRate = 5;
 							break;
@@ -460,6 +474,9 @@ namespace HFF_SpeedTools
 							Application.targetFrameRate = 120;
 							break;
 						case 120:
+							Application.targetFrameRate = 144;
+							break;
+						case 144:
 							Application.targetFrameRate = 500;
 							break;
 						case 500:
