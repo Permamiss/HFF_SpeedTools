@@ -1,6 +1,16 @@
 D:\charl\Documents\Projects\HFF_Speedometer\HFF_Speedometer\bin\Debug\HFF_SpeedTools.dll.config
 D:\charl\Documents\Projects\HFF_Speedometer\HFF_Speedometer\bin\Debug\HFF_SpeedTools.dll
 D:\charl\Documents\Projects\HFF_Speedometer\HFF_Speedometer\bin\Debug\HFF_SpeedTools.pdb
-D:\charl\Documents\Projects\HFF_Speedometer\HFF_Speedometer\obj\Debug\HFF_SpeedTools.csprojResolveAssemblyReference.cache
+D:\charl\Documents\Projects\HFF_Speedometer\HFF_Speedometer\bin\Debug\Assembly-CSharp.dll
+D:\charl\Documents\Projects\HFF_Speedometer\HFF_Speedometer\bin\Debug\BepInEx.dll
+D:\charl\Documents\Projects\HFF_Speedometer\HFF_Speedometer\bin\Debug\BepInEx.Harmony.dll
+D:\charl\Documents\Projects\HFF_Speedometer\HFF_Speedometer\bin\Debug\HumanAPI.dll
+D:\charl\Documents\Projects\HFF_Speedometer\HFF_Speedometer\bin\Debug\UnityEngine.CoreModule.dll
+D:\charl\Documents\Projects\HFF_Speedometer\HFF_Speedometer\bin\Debug\UnityEngine.dll
+D:\charl\Documents\Projects\HFF_Speedometer\HFF_Speedometer\bin\Debug\UnityEngine.IMGUIModule.dll
+D:\charl\Documents\Projects\HFF_Speedometer\HFF_Speedometer\bin\Debug\UnityEngine.PhysicsModule.dll
+D:\charl\Documents\Projects\HFF_Speedometer\HFF_Speedometer\bin\Debug\UnityEngine.TextRenderingModule.dll
+D:\charl\Documents\Projects\HFF_Speedometer\HFF_Speedometer\obj\Debug\HFF_SpeedTools.csproj.CoreCompileInputs.cache
+D:\charl\Documents\Projects\HFF_Speedometer\HFF_Speedometer\obj\Debug\HFF_SpeedTools.csproj.CopyComplete
 D:\charl\Documents\Projects\HFF_Speedometer\HFF_Speedometer\obj\Debug\HFF_SpeedTools.dll
 D:\charl\Documents\Projects\HFF_Speedometer\HFF_Speedometer\obj\Debug\HFF_SpeedTools.pdb
