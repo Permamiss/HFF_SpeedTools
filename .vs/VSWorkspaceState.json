@@ -1,8 +1,8 @@
 {
   "ExpandedNodes": [
     "",
-    "\\HFF_Speedometer"
+    "\\HFF_Speedometer",
+    "\\Libs"
   ],
-  "SelectedNode": "\\HFF_Speedometer\\SharpMonoInjector",
   "PreviewInSolutionExplorer": false
 }
