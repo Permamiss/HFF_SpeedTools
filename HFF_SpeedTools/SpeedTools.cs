@@ -9,7 +9,7 @@ namespace HFF_SpeedTools
 {
 	using UnityEngine;
 
-	[BepInPlugin("org.bepinex.plugins.speedtools", "Speedrun-Practice Tools", "1.0.0.0")]
+	[BepInPlugin("org.bepinex.plugins.humanfallflat.speedtools", "Speedrun-Practice Tools", "1.0.0.1")]
 	[BepInProcess("Human.exe")]
 	public class SpeedTools : BaseUnityPlugin
 	{
