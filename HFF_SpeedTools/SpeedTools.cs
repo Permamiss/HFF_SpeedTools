@@ -7,6 +7,8 @@ using BepInEx;
 
 namespace HFF_SpeedTools
 {
+	using HumanAPI;
+	using System.Linq;
 	using UnityEngine;
 
 	[BepInPlugin("org.bepinex.plugins.humanfallflat.speedtools", "Speedrun-Practice Tools", "1.0.0.1")]
@@ -29,8 +31,9 @@ namespace HFF_SpeedTools
 		static bool CheatsActivated = false; // set to true when player uses any of these
 		private bool renderMenu;
 		private bool renderCheckpoints;
-		private bool renderDebug;
-		private bool renderLoadingZone;
+        private bool renderLoadingZone;
+		private bool renderAllHitboxes;
+        private bool renderDebug;
 		private bool renderSpeed;
 		private bool renderCpNum;
 
@@ -39,8 +42,10 @@ namespace HFF_SpeedTools
 		private GameObject[] primitives;
 		private GameObject cubePrimitive, capsulePrimitive, spherePrimitive, meshPrimitive;
 		private GameObject[] checkpointVisuals;
+		private System.Collections.Generic.List<GameObject> hitboxVisuals;
+		private System.Collections.Generic.List<bool> rendererEnabledForHitboxes;
 		private GameObject loadingZoneVisual;
-		private HumanAPI.LevelPassTrigger curLoadingZone;
+		private LevelPassTrigger curLoadingZone;
 
 		private const int average_SecondsTracked = 45; // how many seconds the speedometer's average tracks for
 		private const string modAuthor = "Permamiss";
@@ -61,8 +66,8 @@ namespace HFF_SpeedTools
 			{
 				StopCoroutine("ClearMessage");
 
-				this.renderDebug = true;
-				this.debugText = theText;
+				renderDebug = true;
+				debugText = theText;
 
 				if (amtSeconds > 0)
 					StartCoroutine("ClearMessage", (float)amtSeconds);
@@ -78,8 +83,8 @@ namespace HFF_SpeedTools
 				amtSeconds = System.Math.Max(amtSeconds, 1.0f); // any less may cause the game to lag
 				StopCoroutine("ClearMessage");
 
-				this.renderDebug = true;
-				this.debugText = theText;
+				renderDebug = true;
+				debugText = theText;
 
 				StartCoroutine("ClearMessage", amtSeconds);
 			}
@@ -88,46 +93,48 @@ namespace HFF_SpeedTools
 		private System.Collections.IEnumerator ClearMessage(float seconds)
 		{
 			yield return new WaitForSeconds(seconds);
-			this.renderDebug = false;
+			renderDebug = false;
 		}
 
 		private void ClearMessage()
 		{
-			this.renderDebug = false;
+			renderDebug = false;
 		}
 
-		private static new void DontDestroyOnLoad(Object target)
+		private static new void DontDestroyOnLoad(UnityEngine.Object target)
 		{
-			Object.DontDestroyOnLoad(target as GameObject);
+			UnityEngine.Object.DontDestroyOnLoad(target as GameObject);
 			UndestroyedObjects.Add(target);
 		}
 
 		private void ResetAverage() // set average back to 0 and start over
 		{
-			this.curSpeedIter = 0;
+			curSpeedIter = 0;
 
-			for (int i = 0; i < this.speedsOverTime.Length; i++)
+			for (int i = 0; i < speedsOverTime.Length; i++)
 			{
-				this.speedsOverTime[i] = 0.0f;
+				speedsOverTime[i] = 0.0f;
 			}
 		}
 
 		private void RefreshMenuMessage()
 		{
-			this.menuMessage = " =" + modName + " Menu= \n";
-			//menuMessage += string.Format("  Page {0} of {1}", this.curPage + 1, (int)System.Math.Ceiling((this.curPage + 1) / 7.0));
+			menuMessage = " =" + modName + " Menu= \n";
+			//menuMessage += string.Format("  Page {0} of {1}", curPage + 1, (int)System.Math.Ceiling((curPage + 1) / 7.0));
 			for (int i = 0; i < (" =" + modName + " Menu= ").Length; i++)
-				this.menuMessage += "-";
-			this.menuMessage += "\n" +
+				menuMessage += "-";
+			menuMessage += "\n" +
 				string.Format("1) Toggle Speedometer [{0}]\n" +
-				"2) Toggle Hit-Box Visual for Checkpoints [{1}]\n" +
-				"3) Toggle Hit-Box Visual for Loading Zones [{2}]\n" +
+				"2) Toggle hitbox Visual for Checkpoints [{1}]\n" +
+				"3) Toggle hitbox Visual for Loading Zones [{2}]\n" +
 				"4) Change Speedometer text color\n" +
 				"5) Reset Speedometer\n" +
 				//"6) Toggle firework launcher [{3}]"
 				"6) Toggle Checkpoint number display [{3}]\n" +
-				'\u2190' + ") Change framerate cap [{4}]"
-				, this.renderSpeed ? "ENABLED" : "DISABLED", this.renderCheckpoints ? "ENABLED" : "DISABLED", this.renderLoadingZone ? "ENABLED" : "DISABLED", this.renderCpNum ? "ENABLED" : "DISABLED", Application.targetFrameRate.ToString()) +
+                "7) Toggle Toggle hitbox Visual for all objects [{4}]\n" +
+
+                '\u2190' + ") Change framerate cap [{5}]"
+                , renderSpeed ? "ENABLED" : "DISABLED", renderCheckpoints ? "ENABLED" : "DISABLED", renderLoadingZone ? "ENABLED" : "DISABLED", renderCpNum ? "ENABLED" : "DISABLED", renderAllHitboxes ? "ENABLED" : "DISABLED", Application.targetFrameRate.ToString()) +
 				//(Fireworks.instance && Fireworks.instance.enableWeapons) ? "ENABLED" : "DISABLED") +
 
 				"\n" +
@@ -136,29 +143,29 @@ namespace HFF_SpeedTools
 
 		private void MenuMessages()
 		{
-			DebugMessage(this.menuMessage, 0, false);
+			DebugMessage(menuMessage, 0, false);
 		}
 
 		private void SpeedometerMessages()
 		{
 			float averageSpeed = 0.0f;
-			foreach (float newSpeed in this.speedsOverTime)
+			foreach (float newSpeed in speedsOverTime)
 			{
 				averageSpeed += newSpeed;
 			}
-			averageSpeed /= (this.curSpeedIter + 1); // divide sum of existing speeds by amount to obtain TRUE average
+			averageSpeed /= (curSpeedIter + 1); // divide sum of existing speeds by amount to obtain TRUE average
 
-			GUI.Label(new Rect(Screen.width / 2, Screen.height - 150, 0, 50), string.Format("Current Speed: {0:0.0}", Human.instance ? Mathf.Sqrt(Mathf.Pow(Human.instance.velocity.x, 2.0f) + Mathf.Pow(Human.instance.velocity.z, 2.0f)) : 0.0f), this.theStyle);
-			GUI.Label(new Rect(Screen.width / 2, Screen.height - 100, 0, 50), string.Format("Average Speed: {0:0.0}", averageSpeed), this.theStyle);
-			GUI.Label(new Rect(Screen.width / 2, Screen.height - 50, 0, 50), string.Format("Maximum Speed: {0:0.0}", this.maxSpeedReached), this.theStyle);
+			GUI.Label(new Rect(Screen.width / 2, Screen.height - 150, 0, 50), string.Format("Current Speed: {0:0.0}", Human.instance ? Mathf.Sqrt(Mathf.Pow(Human.instance.velocity.x, 2.0f) + Mathf.Pow(Human.instance.velocity.z, 2.0f)) : 0.0f), theStyle);
+			GUI.Label(new Rect(Screen.width / 2, Screen.height - 100, 0, 50), string.Format("Average Speed: {0:0.0}", averageSpeed), theStyle);
+			GUI.Label(new Rect(Screen.width / 2, Screen.height - 50, 0, 50), string.Format("Maximum Speed: {0:0.0}", maxSpeedReached), theStyle);
 		}
 
 		private void ShowCheckpointNum()
 		{
-			GUI.Label(new Rect(Screen.width - 100, 30, 100, 50), "Checkpoint: " + Game.instance.currentCheckpointNumber + " (Previous: " + this.prevCpNum + ")");
+			GUI.Label(new Rect(Screen.width - 100, 30, 100, 50), "Checkpoint: " + Game.instance.currentCheckpointNumber + " (Previous: " + prevCpNum + ")");
 		}
 
-		private GameObject generateHitboxVisual(HumanAPI.Checkpoint sourceObject)
+		private GameObject generateHitboxVisual(GameObject sourceObject)
 		{
 			/*
 			* 0 = box/cube
@@ -166,133 +173,185 @@ namespace HFF_SpeedTools
 			* 2 = sphere
 			* 3 = mesh
 			*/
-			int colType = -1;
-			GameObject hitboxVisual;
-			BoxCollider boxCol = sourceObject.gameObject.GetComponent<BoxCollider>();
-			CapsuleCollider capsuleCol = sourceObject.gameObject.GetComponent<CapsuleCollider>();
-			SphereCollider sphereCol = sourceObject.gameObject.GetComponent<SphereCollider>();
-			MeshCollider meshCol = sourceObject.gameObject.GetComponent<MeshCollider>();
-			//maybe add meshcollider as well
 
-			if (boxCol)
-				colType = 0;
-			else if (capsuleCol)
-				colType = 1;
-			else if (sphereCol)
-				colType = 2;
-			else if (meshCol)
-				colType = 3;
-			
-			switch (colType)
+			Collider collider = sourceObject.gameObject.GetComponent<Collider>();
+			GameObject hitboxVisual = null;
+
+			//if (boxCol)
+			if (collider)
 			{
-				case 0:
-					hitboxVisual = Instantiate(this.cubePrimitive);
-					hitboxVisual.transform.localScale = new Vector3(boxCol.size.x * sourceObject.transform.localScale.x, boxCol.size.y * sourceObject.transform.localScale.y, boxCol.size.z * sourceObject.transform.localScale.z);
+				if (collider is BoxCollider boxCol)
+				{
+					hitboxVisual = Instantiate(cubePrimitive);
+					hitboxVisual.transform.localScale = Vector3.Scale(boxCol.size, sourceObject.transform.localScale);
 					hitboxVisual.transform.SetParent(sourceObject.transform, false);
 					hitboxVisual.transform.position = boxCol.bounds.center;
-					break;
-				case 1:
+				}
+				else if (collider is CapsuleCollider capsuleCol)
+				{
 					DebugMessage("Collider type is CapsuleCollider");
-					hitboxVisual = Instantiate(this.capsulePrimitive);
+					hitboxVisual = Instantiate(capsulePrimitive);
 					hitboxVisual.transform.localScale = new Vector3(capsuleCol.radius * 2 * capsuleCol.transform.localScale.x, capsuleCol.height * capsuleCol.transform.localScale.y, capsuleCol.radius * 2 * capsuleCol.transform.localScale.z);
 					hitboxVisual.transform.SetParent(capsuleCol.transform, false);
-					break;
-				case 2:
+				}
+				else if (collider is SphereCollider sphereCol)
+				{
 					DebugMessage("Collider type is SphereCollider");
-					hitboxVisual = Instantiate(this.spherePrimitive);
-					hitboxVisual.transform.localScale = new Vector3(sphereCol.radius * 2 * sphereCol.transform.localScale.x, sphereCol.radius * 2 * sphereCol.transform.localScale.y, sphereCol.radius * 2 * sphereCol.transform.localScale.z);
+					hitboxVisual = Instantiate(spherePrimitive);
+					hitboxVisual.transform.localScale = Vector3.Scale(new Vector3(sphereCol.radius, sphereCol.radius, sphereCol.radius) * 2, sphereCol.transform.localScale);
 					hitboxVisual.transform.SetParent(sphereCol.transform, false);
-					break;
-				default:
+				}
+				else if (collider is MeshCollider meshCol)
+				{
+
+					hitboxVisual = Instantiate(cubePrimitive);
+					Mesh ogMesh = meshCol.sharedMesh;
+					Mesh newMesh = new Mesh();
+					newMesh.vertices = ogMesh.vertices;
+					newMesh.triangles = ogMesh.triangles;
+					newMesh.uv = ogMesh.uv;
+					newMesh.normals = ogMesh.normals;
+					newMesh.colors = ogMesh.colors;
+					newMesh.tangents = ogMesh.tangents;
+					hitboxVisual.GetComponent<MeshFilter>().mesh = newMesh;
+
+					//hitboxVisual.transform.localScale = sourceObject.transform.localScale;
+					hitboxVisual.transform.SetParent(sourceObject.transform, false);
+					//AssetDatabase.CreateAsset(newMesh, AssetDatabase.GetAssetPath(ogMesh) + "_HitboxVisual.asset");
+
+					//hitboxVisual = Instantiate(sourceObject.gameObject);
+					//hitboxVisual.transform.localScale *= 1.1f;
+				}
+				else
+				{
 					DebugMessage("Collider type is MeshCollider or something else or nonexistant");
-					hitboxVisual = Instantiate(this.cubePrimitive);
+					hitboxVisual = Instantiate(cubePrimitive);
 					hitboxVisual.transform.localScale = sourceObject.transform.localScale;
 					hitboxVisual.transform.SetParent(sourceObject.transform, false);
-					break;
+				}
+
+				hitboxVisual.name = "HitboxVisual";
 			}
 
-			//hitboxVisual.transform.SetParent(sourceObject.transform, false);
-			hitboxVisual.name = "CheckpointVisual";
 			return hitboxVisual;
 		}
 
-		private GameObject generateHitboxVisual(HumanAPI.LevelPassTrigger sourceObject)
-		{
-			/*
-			* 0 = box/cube
-			* 1 = capsule
-			* 2 = sphere
-			* 3 = mesh
-			*/
-			int colType = -1;
-			GameObject hitboxVisual;
-			BoxCollider boxCol = sourceObject.gameObject.GetComponent<BoxCollider>();
-			CapsuleCollider capsuleCol = sourceObject.gameObject.GetComponent<CapsuleCollider>();
-			SphereCollider sphereCol = sourceObject.gameObject.GetComponent<SphereCollider>();
-			MeshCollider meshCol = sourceObject.gameObject.GetComponent<MeshCollider>();
-			//maybe add meshcollider as well
-
-			if (boxCol)
-				colType = 0;
-			else if (capsuleCol)
-				colType = 1;
-			else if (sphereCol)
-				colType = 2;
-			else if (meshCol)
-				colType = 3;
-
-			switch (colType)
+        private void RenderAllHitboxes(bool active)
+        {
+			//Shell.Print("about to check 'if active' in RenderHitboxVisuals");
+            //Shell.Print(string.Format("RenderAllHitboxes called with active={0}", active));
+            if (active)
 			{
-				case 0:
-					hitboxVisual = Instantiate(this.cubePrimitive);
-					hitboxVisual.transform.localScale = new Vector3(boxCol.size.x * sourceObject.transform.localScale.x, boxCol.size.y * sourceObject.transform.localScale.y, boxCol.size.z * sourceObject.transform.localScale.z);
-					hitboxVisual.transform.SetParent(sourceObject.transform, false);
-					hitboxVisual.transform.position = boxCol.bounds.center;
-					break;
-				case 1:
-					DebugMessage("Collider type is CapsuleCollider");
-					hitboxVisual = Instantiate(this.capsulePrimitive);
-					hitboxVisual.transform.localScale = new Vector3(capsuleCol.radius * 2 * capsuleCol.transform.localScale.x, capsuleCol.height * capsuleCol.transform.localScale.y, capsuleCol.radius * 2 * capsuleCol.transform.localScale.z);
-					hitboxVisual.transform.SetParent(capsuleCol.transform, false);
-					break;
-				case 2:
-					DebugMessage("Collider type is SphereCollider");
-					hitboxVisual = Instantiate(this.spherePrimitive);
-					hitboxVisual.transform.localScale = new Vector3(sphereCol.radius * 2 * sphereCol.transform.localScale.x, sphereCol.radius * 2 * sphereCol.transform.localScale.y, sphereCol.radius * 2 * sphereCol.transform.localScale.z);
-					hitboxVisual.transform.SetParent(sphereCol.transform, false);
-					break;
-				default:
-					DebugMessage("Collider type is MeshCollider or something else or nonexistant");
-					hitboxVisual = Instantiate(this.cubePrimitive);
-					hitboxVisual.transform.localScale = sourceObject.transform.localScale;
-					hitboxVisual.transform.SetParent(sourceObject.transform, false);
-					break;
-			}
-			
-			hitboxVisual.name = "LoadingZoneVisual";
-			return hitboxVisual;
-		}
+				DebugMessage("RenderAllHitboxVisuals activated");
+				System.Collections.Generic.List<GameObject> levelObjects = FindObjectsOfType<GameObject>().ToList();
+				DebugMessage(string.Format("amount of GameObjects: {0}", levelObjects.Count));
 
-		private void RenderCheckpoints(bool active)
+				for (int i = 0; i < levelObjects.Count; i++)
+				{
+					//DebugMessage(string.Format("iteration #{0}", i));
+					if (levelObjects[i].name == "HitboxVisual")
+					{
+						DebugMessage(string.Format("removing HitboxVisual {0} from list of hitboxes to make", i));
+						levelObjects.RemoveAt(i);
+					}
+				}
+                
+				DebugMessage(string.Format("going to render {0} hitboxes", levelObjects.Count));
+				for (int i = 0; i < levelObjects.Count; i++)
+				{
+					DebugMessage("generating hitbox visual");
+					hitboxVisuals.Add(generateHitboxVisual(levelObjects[i]));
+					GameObject hitboxVisual = hitboxVisuals.Last();
+                    DebugMessage("getting renderer of hitboxVisual and setting color");
+					if (hitboxVisual)
+					{
+						float transparency = 1f;
+						Collider collider = hitboxVisual.GetComponent<Collider>();
+						if (collider != null)
+							transparency = collider.isTrigger ? 0.33f : transparency;
+
+                        Renderer objRenderer = hitboxVisual.GetComponent<Renderer>();
+                        if (transparency == 1f)
+						{
+							StandardShaderUtils.ChangeRenderMode(objRenderer.material, StandardShaderUtils.BlendMode.Opaque);
+
+							//objRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On; // so that it doesn't cast shadows on things
+							//objRenderer.receiveShadows = true;
+						}
+                        objRenderer.material.SetColor("_Color", new Color(0.3f, 0.3f, 0.8f, transparency)); // dark-ish blue
+						hitboxVisual.SetActive(true);
+
+						DebugMessage("getting renderer of levelObject and getting renderer to store renderEnabled state");
+						objRenderer = levelObjects[i].GetComponent<Renderer>();
+						if (objRenderer != null)
+						{
+							rendererEnabledForHitboxes.Add(objRenderer.enabled);
+							objRenderer.enabled = false;
+						}
+						else
+						{
+							Destroy(hitboxVisual);
+							hitboxVisuals.RemoveAt(hitboxVisuals.Count - 1);
+						}
+					}
+					else
+					{
+						DebugMessage(string.Format("hitboxVisual #{0} did not generate properly!", i));
+						Destroy(hitboxVisual);
+						hitboxVisuals.RemoveAt(hitboxVisuals.Count - 1);
+					}
+				}
+			}
+			else
+			{
+				DebugMessage(string.Format("Size of hitboxVisuals should be same size as rendererEnabledForHitboxes ({0} = {1})", hitboxVisuals.Count, rendererEnabledForHitboxes.Count));
+				for (int i = 0; i < hitboxVisuals.Count; i++)
+				{
+					//if (hitboxVisuals[i])
+					//{
+					if (hitboxVisuals[i].transform.parent != null)
+					{
+						GameObject anObject = hitboxVisuals[i].transform.parent.gameObject;
+						if (anObject != null)
+						{
+							Renderer theRenderer = anObject.GetComponent<Renderer>();
+							if (theRenderer != null)
+								theRenderer.enabled = rendererEnabledForHitboxes[i];
+						}
+					}
+				}
+
+                foreach (GameObject go in hitboxVisuals)
+                {
+                    Destroy(go);
+                }
+                Shell.Print("Destroyed all previous hitbox visuals");
+
+                hitboxVisuals.Clear();
+				rendererEnabledForHitboxes.Clear();
+            }
+        }
+
+        private void RenderCheckpoints(bool active)
 		{
-			HumanAPI.Checkpoint[] lvlCPs = FindObjectsOfType<HumanAPI.Checkpoint>();
+            CheatsActivated = active || CheatsActivated;
+            Checkpoint[] lvlCPs = FindObjectsOfType<Checkpoint>();
 			// get rid of previous checkpoint visuals
-			foreach (GameObject go in this.checkpointVisuals)
+			foreach (GameObject go in checkpointVisuals)
 			{
 				Destroy(go);
 			}
-			this.checkpointVisuals.Initialize(); // reset array
+			checkpointVisuals.Initialize(); // reset array
 			//DebugMessage("Reset checkpointVisuals array");
 			if (active)
 			{
-				HumanAPI.LevelPassTrigger theLoadZone = FindObjectOfType<HumanAPI.LevelPassTrigger>();
 				for (int i = 0; i < lvlCPs.Length; i++)
 				{
 					if (lvlCPs[i].number != 0) // only generate visual if it's not the "first" checkpoint (where you spawn)
 					{
-						this.checkpointVisuals[i] = this.generateHitboxVisual(lvlCPs[i]);
-						this.checkpointVisuals[i].GetComponent<Renderer>().material.SetColor("_Color", new Color(1.0f, 0.66f, 0.0f, 0.33f)); // orange for checkpoints :)
-						this.checkpointVisuals[i].SetActive(true);
+						checkpointVisuals[i] = generateHitboxVisual(lvlCPs[i].gameObject);
+						checkpointVisuals[i].GetComponent<Renderer>().material.SetColor("_Color", new Color(1.0f, 0.66f, 0.0f, 0.33f)); // orange for checkpoints :)
+						checkpointVisuals[i].SetActive(true);
 					}
 				}
 			}
@@ -300,22 +359,50 @@ namespace HFF_SpeedTools
 
 		private void RenderLoadingZone(bool active)
 		{
-			this.curLoadingZone = FindObjectOfType<HumanAPI.LevelPassTrigger>();
+            CheatsActivated = active || CheatsActivated;
+            curLoadingZone = FindObjectOfType<LevelPassTrigger>();
 			// get rid of previous loading zone visual
-			if (this.loadingZoneVisual != null)
-				Destroy(this.loadingZoneVisual);
-			if (active && this.curLoadingZone)
+			if (loadingZoneVisual != null)
+				Destroy(loadingZoneVisual);
+			if (active && curLoadingZone)
 			{
-				this.loadingZoneVisual = this.generateHitboxVisual(this.curLoadingZone);
-				this.loadingZoneVisual.SetActive(true);
+				loadingZoneVisual = generateHitboxVisual(curLoadingZone.gameObject);
+				loadingZoneVisual.SetActive(true);
 			}
 		}
 
-		private void SetRenderCheckpoints(string txt)
+        private void SetRenderAllHitboxes(string txt)
+        {
+            if (string.IsNullOrEmpty(txt))
+                renderAllHitboxes = !renderAllHitboxes; // toggles if no words after command
+            else
+            {
+                string[] words = txt.Split(new char[]
+                {
+                    ' '
+                }, System.StringSplitOptions.RemoveEmptyEntries);
+
+                if (words.Length != 1)
+                    return;
+
+                if (int.TryParse(words[0], out int num))
+                    renderAllHitboxes = num != 0;
+                else if (words[0].ToLower() == "true")
+                    renderAllHitboxes = true;
+                else if (words[0].ToLower() == "false")
+                    renderAllHitboxes = false;
+            }
+            RenderAllHitboxes(renderAllHitboxes);
+            Shell.Print(string.Format("hitbox renderer {0}", renderAllHitboxes ? "enabled" : "disabled"));
+        }
+
+        private void SetRenderCheckpoints(string txt)
 		{
-			SpeedTools.CheatsActivated = true;
+			// NOTE TO SELF:
+			//	should make it so that CheatsActivated turns ON only if one of the cheats is actually on
+			//	should make it so that CheatsActivated turns OFF if you restart/reach a new level with none of the cheats on
 			if (string.IsNullOrEmpty(txt))
-				this.renderCheckpoints = !this.renderCheckpoints; // toggles if no words after command
+				renderCheckpoints = !renderCheckpoints; // toggles if no words after command
 			else
 			{
 				string[] words = txt.Split(new char[]
@@ -326,23 +413,21 @@ namespace HFF_SpeedTools
 				if (words.Length != 1)
 					return;
 
-				int num;
-				if (int.TryParse(words[0], out num))
-					this.renderCheckpoints = num != 0;
+				if (int.TryParse(words[0], out int num))
+					renderCheckpoints = num != 0;
 				else if (words[0].ToLower() == "true")
-					this.renderCheckpoints = true;
+					renderCheckpoints = true;
 				else if (words[0].ToLower() == "false")
-					this.renderCheckpoints = false;
+					renderCheckpoints = false;
 			}
-			this.RenderCheckpoints(this.renderCheckpoints);
-			Shell.Print(string.Format("checkpoint hit-box renderer {0}", this.renderCheckpoints ? "enabled" : "disabled"));
+			RenderCheckpoints(renderCheckpoints);
+			Shell.Print(string.Format("checkpoint hitbox renderer {0}", renderCheckpoints ? "enabled" : "disabled"));
 		}
 
 		private void SetRenderLoadingZone(string txt)
 		{
-			SpeedTools.CheatsActivated = true;
 			if (string.IsNullOrEmpty(txt))
-				this.renderLoadingZone = !this.renderLoadingZone; // toggles if no words after command
+				renderLoadingZone = !renderLoadingZone; // toggles if no words after command
 			else
 			{
 				string[] words = txt.Split(new char[]
@@ -353,23 +438,21 @@ namespace HFF_SpeedTools
 				if (words.Length != 1)
 					return;
 
-				int num;
-				if (int.TryParse(words[0], out num))
-					this.renderLoadingZone = num != 0;
+				if (int.TryParse(words[0], out int num))
+					renderLoadingZone = num != 0;
 				else if (words[0].ToLower() == "true")
-					this.renderLoadingZone = true;
+					renderLoadingZone = true;
 				else if (words[0].ToLower() == "false")
-					this.renderLoadingZone = false;
+					renderLoadingZone = false;
 			}
-			this.RenderLoadingZone(this.renderLoadingZone);
-			Shell.Print(string.Format("loading zone hit-box renderer {0}", this.renderLoadingZone ? "enabled" : "disabled"));
+			RenderLoadingZone(renderLoadingZone);
+			Shell.Print(string.Format("loading zone hitbox renderer {0}", renderLoadingZone ? "enabled" : "disabled"));
 		}
 
-		private void SetDisplaySpeedometer(string txt)
+        private void SetDisplaySpeedometer(string txt)
 		{
-			SpeedTools.CheatsActivated = true;
 			if (string.IsNullOrEmpty(txt))
-				this.renderSpeed = !this.renderSpeed; // toggles if no words after command
+				renderSpeed = !renderSpeed; // toggles if no words after command
 			else
 			{
 				string[] words = txt.Split(new char[]
@@ -380,22 +463,22 @@ namespace HFF_SpeedTools
 				if (words.Length != 1)
 					return;
 
-				int num;
-				if (int.TryParse(words[0], out num))
-					this.renderSpeed = num != 0;
+				if (int.TryParse(words[0], out int num))
+					renderSpeed = num != 0;
 				else if (words[0].ToLower() == "true")
-					this.renderSpeed = true;
+					renderSpeed = true;
 				else if (words[0].ToLower() == "false")
-					this.renderSpeed = false;
+					renderSpeed = false;
+
+				CheatsActivated = renderSpeed || CheatsActivated;
 			}
-			Shell.Print(string.Format("speedometer {0}", this.renderSpeed ? "enabled" : "disabled"));
+			Shell.Print(string.Format("speedometer {0}", renderSpeed ? "enabled" : "disabled"));
 		}
 
 		private void SetDisplayCheckpointNum(string txt)
 		{
-			SpeedTools.CheatsActivated = true;
 			if (string.IsNullOrEmpty(txt))
-				this.renderCpNum = !this.renderCpNum; // toggles if no words after command
+				renderCpNum = !renderCpNum; // toggles if no words after command
 			else
 			{
 				string[] words = txt.Split(new char[]
@@ -406,61 +489,65 @@ namespace HFF_SpeedTools
 				if (words.Length != 1)
 					return;
 
-				int num;
-				if (int.TryParse(words[0], out num))
-					this.renderSpeed = num != 0;
+				if (int.TryParse(words[0], out int num))
+					renderSpeed = num != 0;
 				else if (words[0].ToLower() == "true")
-					this.renderCpNum = true;
+					renderCpNum = true;
 				else if (words[0].ToLower() == "false")
-					this.renderCpNum = false;
+					renderCpNum = false;
+
+				CheatsActivated = renderCpNum || CheatsActivated;
 			}
-			Shell.Print(string.Format("checkpoint number display {0}", this.renderCpNum ? "enabled" : "disabled"));
+			Shell.Print(string.Format("checkpoint number display {0}", renderCpNum ? "enabled" : "disabled"));
 		}
 
 
 		private void Start()
 		{
-			this.gameLevel = -1;
+			gameLevel = -1;
 
-			this.curColor = 0;
-			this.curSpeedIter = 0;
-			this.maxSpeedReached = 0.0f;
-			this.prevCpNum = this.curCpNum = 0;
+			curColor = 0;
+			curSpeedIter = 0;
+			maxSpeedReached = 0.0f;
+			prevCpNum = curCpNum = 0;
 
-			this.renderCheckpoints = false;
-			this.renderLoadingZone = false;
-			this.renderSpeed = false;
-			this.renderMenu = false;
-			this.renderDebug = false;
+			renderCheckpoints = false;
+			renderLoadingZone = false;
+			renderAllHitboxes = false;
+			renderSpeed = false;
+			renderMenu = false;
+			renderDebug = false;
 
-			this.debugText = string.Empty;
-			this.curLoadingZone = null;
-			this.colorSwatch = new Color[8] { Color.black, Color.white, Color.red, new Color(1.0f, 0.549f, 0.0f), new Color(1.0f, 1.0f, 0.0f), Color.green, Color.blue, new Color(0.5f, 0.0f, 0.5f) }; // black, white, and colors of rainbow
+			debugText = string.Empty;
+			curLoadingZone = null;
+			colorSwatch = new Color[8] { Color.black, Color.white, Color.red, new Color(1.0f, 0.549f, 0.0f), new Color(1.0f, 1.0f, 0.0f), Color.green, Color.blue, new Color(0.5f, 0.0f, 0.5f) }; // black, white, and colors of rainbow
 
-			this.theStyle = new GUIStyle()
+			theStyle = new GUIStyle()
 			{
 				wordWrap = false,
 				fontSize = 48,
 				alignment = TextAnchor.UpperCenter
 			};
-			this.theStyle.normal.textColor = this.colorSwatch[0];
+			theStyle.normal.textColor = colorSwatch[0];
 
-			this.cubePrimitive = GameObject.CreatePrimitive(PrimitiveType.Cube);
-			this.capsulePrimitive = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-			this.spherePrimitive = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-			this.meshPrimitive = GameObject.CreatePrimitive(PrimitiveType.Cube); // dunno how to implement a mesh at the moment
+			cubePrimitive = GameObject.CreatePrimitive(PrimitiveType.Cube);
+			capsulePrimitive = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+			spherePrimitive = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+			meshPrimitive = GameObject.CreatePrimitive(PrimitiveType.Cube); // dunno how to implement a mesh at the moment
 
-			this.primitives = new GameObject[4];
-			this.primitives[0] = this.cubePrimitive;
-			this.primitives[1] = this.capsulePrimitive;
-			this.primitives[2] = this.spherePrimitive;
-			this.primitives[3] = this.meshPrimitive;
+			primitives = new GameObject[4];
+			primitives[0] = cubePrimitive;
+			primitives[1] = capsulePrimitive;
+			primitives[2] = spherePrimitive;
+			primitives[3] = meshPrimitive;
 
-			this.checkpointVisuals = new GameObject[50];
+			checkpointVisuals = new GameObject[50];
+			hitboxVisuals = new System.Collections.Generic.List<GameObject>();
+			rendererEnabledForHitboxes = new System.Collections.Generic.List<bool>();
 
-			this.loadingZoneVisual = null;
+			loadingZoneVisual = null;
 
-			foreach (GameObject theObject in this.primitives)
+			foreach (GameObject theObject in primitives)
 			{
 				Renderer objRenderer = theObject.GetComponent<Renderer>();
 				StandardShaderUtils.ChangeRenderMode(objRenderer.material, StandardShaderUtils.BlendMode.Transparent);
@@ -477,6 +564,7 @@ namespace HFF_SpeedTools
 
 			RenderCheckpoints(false);
 			RenderLoadingZone(false);
+			RenderAllHitboxes(false);
 			ResetAverage();
 			RefreshMenuMessage();
 
@@ -493,105 +581,109 @@ namespace HFF_SpeedTools
 			Shell.Print("Written by: " + modAuthor);
 			Shell.Print(equalSigns + "</color>");
 
-			Shell.RegisterCommand("showcheckpoints", new System.Action<string>(this.SetRenderCheckpoints), "showcheckpoints\r\nToggle visual for checkpoints");
-			Shell.RegisterCommand("showcps", new System.Action<string>(this.SetRenderCheckpoints), null);
-			Shell.RegisterCommand("showcp", new System.Action<string>(this.SetRenderCheckpoints), null);
-			Shell.RegisterCommand("showloadingzones", new System.Action<string>(this.SetRenderLoadingZone), "showloadingzones\r\nToggle visual for loading zones");
-			Shell.RegisterCommand("showlzs", new System.Action<string>(this.SetRenderLoadingZone), null);
-			Shell.RegisterCommand("showlz", new System.Action<string>(this.SetRenderLoadingZone), null);
-			Shell.RegisterCommand("speedometer", new System.Action<string>(this.SetDisplaySpeedometer), "speedometer\r\nToggle speedometer");
-			Shell.RegisterCommand("checkpointnum", new System.Action<string>(this.SetDisplayCheckpointNum), "checkpointnum\r\nToggle UI display of current & previous checkpoint");
+			Shell.RegisterCommand("showcheckpoints", new System.Action<string>(SetRenderCheckpoints), "showcheckpoints\r\nToggle visual for checkpoints");
+			Shell.RegisterCommand("showcps", new System.Action<string>(SetRenderCheckpoints), null);
+			Shell.RegisterCommand("showcp", new System.Action<string>(SetRenderCheckpoints), null);
+			Shell.RegisterCommand("showloadingzones", new System.Action<string>(SetRenderLoadingZone), "showloadingzones\r\nToggle visual for loading zones");
+			Shell.RegisterCommand("showlzs", new System.Action<string>(SetRenderLoadingZone), null);
+			Shell.RegisterCommand("showlz", new System.Action<string>(SetRenderLoadingZone), null);
+			Shell.RegisterCommand("showhitboxes", new System.Action<string>(SetRenderAllHitboxes), "showhitboxes\r\nToggle hitbox for all objects");
+			Shell.RegisterCommand("speedometer", new System.Action<string>(SetDisplaySpeedometer), "speedometer\r\nToggle speedometer");
+			Shell.RegisterCommand("checkpointnum", new System.Action<string>(SetDisplayCheckpointNum), "checkpointnum\r\nToggle UI display of current & previous checkpoint");
 
-			DebugMessage("Press \"NumPad-Enter\" to bring up the SpeedTools menu.\r\nAlternatively type \"help\" in console to see new console commands.\r\nNOTE: INVALIDATES SPEEDRUN IF USED; RESTART GAME WHEN DONE WITH PRACTICE", 16, false);
+			//DebugMessage("Press \"NumPad-Enter\" to bring up the SpeedTools menu.\r\nAlternatively type \"help\" in console to see new console commands.\r\nNOTE: INVALIDATES SPEEDRUN IF USED; RESTART GAME WHEN DONE WITH PRACTICE", 16, false);
+			//SubtitleManager.instance.SetSubtitle("Press \"NumPad-Enter\" to bring up the SpeedTools menu.\nAlternatively type \"help\" in console to see new console commands.\nNOTE: INVALIDATES SPEEDRUN IF USED; RESTART GAME OR TURN OFF USED TOOLS THEN RESTART LEVEL WHEN DONE WITH PRACTICE", 16);
+
 		}
 
 		private void OnGUI()
 		{
 			// debug message
-			if (this.renderDebug)
-				GUI.Label(new Rect(10, 30, Screen.width - 10, Screen.height - 30), this.debugText);
-			if (this.renderSpeed)
+			if (renderDebug)
+				GUI.Label(new Rect(10, 30, Screen.width - 10, Screen.height - 30), debugText);
+			if (renderSpeed)
 				SpeedometerMessages();
-			if (this.renderMenu)
+			if (renderMenu)
 				MenuMessages();
-			else if (SpeedTools.CheatsActivated)
+			/*
+			else if (CheatsActivated)
 				DebugMessage("Cheats were activated during this instance of the game; restart to remove this message", 0, false);
-			if (this.renderCpNum)
+			*/
+			if (renderCpNum)
 				ShowCheckpointNum();
 		}
 
 		private void Update()
 		{
-			if (this.curCpNum != Game.instance.currentCheckpointNumber)
-				this.prevCpNum = this.curCpNum;
-			this.curCpNum = Game.instance.currentCheckpointNumber;
+			if (curCpNum != Game.instance.currentCheckpointNumber)
+				prevCpNum = curCpNum;
+			curCpNum = Game.instance.currentCheckpointNumber;
 
 			if (Input.GetKeyDown(KeyCode.KeypadEnter)) // toggle menu
 			{
-				SpeedTools.CheatsActivated = true;
-				this.renderMenu = !this.renderMenu;
-				if (!this.renderMenu)
+				//CheatsActivated = true;
+				renderMenu = !renderMenu;
+				if (!renderMenu)
 					ClearMessage();
 			}
 
-			// temporary debug test to see if we can force workshop menu
-			/*if (Input.GetKey(KeyCode.L))
-			{
-				LevelSelectMenu2.mode = LevelSelectMenuMode.Workshop;
-				DebugMessage("Set LevelSelectMenu2.mode to Workshop");
-			}*/
-
-			if (this.renderMenu)
+			if (renderMenu)
 			{
 				if (Input.GetKeyDown(KeyCode.Alpha0)) // exit menu
 				{
-					this.renderMenu = false;
+					renderMenu = false;
 					ClearMessage();
 				}
 
 				if (Input.GetKeyDown(KeyCode.Alpha1)) // toggle speedometer (and reset it)
 				{
-					this.renderSpeed = !this.renderSpeed;
+					renderSpeed = !renderSpeed;
 					RefreshMenuMessage();
-					if (!this.renderSpeed)
+					if (!renderSpeed)
 					{
 						ResetAverage();
-						this.maxSpeedReached = 0.0f;
+						maxSpeedReached = 0.0f;
 						DebugMessage("Reset Speedometer");
 					}
 				}
-				if (Input.GetKeyDown(KeyCode.Alpha2)) // render checkpoint hit-boxes
+				if (Input.GetKeyDown(KeyCode.Alpha2)) // render checkpoint hitboxes
 				{
-					this.renderCheckpoints = !this.renderCheckpoints;
+					renderCheckpoints = !renderCheckpoints;
 					RefreshMenuMessage();
-					DebugMessage(string.Format("{0} view of checkpoints' hit-boxes", this.renderCheckpoints ? "Enabled" : "Disabled"));
-					this.RenderCheckpoints(this.renderCheckpoints);
+					DebugMessage(string.Format("{0} view of checkpoints' hitboxes", renderCheckpoints ? "Enabled" : "Disabled"));
+					RenderCheckpoints(renderCheckpoints);
 				}
-				if (Input.GetKeyDown(KeyCode.Alpha3)) // render loading zone hit-boxes
+				if (Input.GetKeyDown(KeyCode.Alpha3)) // render loading zone hitboxes
 				{
-					this.renderLoadingZone = !this.renderLoadingZone;
+					renderLoadingZone = !renderLoadingZone;
 					RefreshMenuMessage();
-					DebugMessage(string.Format("{0} view of loading zone hitbox", this.renderLoadingZone ? "Enabled" : "Disabled"));
-					this.RenderLoadingZone(this.renderLoadingZone);
+					DebugMessage(string.Format("{0} view of loading zone hitbox", renderLoadingZone ? "Enabled" : "Disabled"));
+					RenderLoadingZone(renderLoadingZone);
 				}
 				if (Input.GetKeyDown(KeyCode.Alpha4)) // cycle through color swatch (for speedometer display)
 				{
-					this.curColor = (this.curColor + 1) % (this.colorSwatch.Length); // cycles from 0-size of colorSwatch and then repeats
-					this.theStyle.normal.textColor = this.colorSwatch[this.curColor]; // properly change the color
+					curColor = (curColor + 1) % (colorSwatch.Length); // cycles from 0-size of colorSwatch and then repeats
+					theStyle.normal.textColor = colorSwatch[curColor]; // properly change the color
 					DebugMessage("Changed Speedometer text color");
 				}
 				if (Input.GetKeyDown(KeyCode.Alpha5)) // reset the speedometer
 				{
 					ResetAverage();
-					this.maxSpeedReached = 0.0f;
+					maxSpeedReached = 0.0f;
 					DebugMessage("Reset Speedometer");
 				}
 				if (Input.GetKeyDown(KeyCode.Alpha6)) // render current & previous checkpoint numbers
 				{
-					//this.renderCpNum = !this.renderCpNum;
-					this.SetDisplayCheckpointNum("");
+					SetDisplayCheckpointNum("");
 					RefreshMenuMessage();
-					DebugMessage(string.Format("{0} display of checkpoint numbers", this.renderCpNum ? "Enabled" : "Disabled"));
+					DebugMessage(string.Format("{0} display of checkpoint numbers", renderCpNum ? "Enabled" : "Disabled"));
+				}
+				if (Input.GetKeyDown(KeyCode.Alpha7)) // render all hitboxes
+				{
+					renderAllHitboxes = !renderAllHitboxes;
+					RefreshMenuMessage();
+					DebugMessage(string.Format("{0} view of all hitboxes", renderAllHitboxes ? "Enabled" : "Disabled"));
+					RenderAllHitboxes(renderAllHitboxes);
 				}
 				if (Input.GetKeyDown(KeyCode.Backspace)) // cycle through framerate-cap swatch
 				{
@@ -635,41 +727,41 @@ namespace HFF_SpeedTools
 				}
 			}
 
-			//bool pauseSpeedTracker = (!this.renderSpeed || !Human.instance || Game.instance.state != GameState.PlayingLevel || !(Human.instance.state == HumanState.Walk || Human.instance.state == HumanState.Jump || Human.instance.state == HumanState.Slide || Human.instance.state == HumanState.Fall || Human.instance.state == HumanState.FreeFall));
+			//bool pauseSpeedTracker = (!renderSpeed || !Human.instance || Game.instance.state != GameState.PlayingLevel || !(Human.instance.state == HumanState.Walk || Human.instance.state == HumanState.Jump || Human.instance.state == HumanState.Slide || Human.instance.state == HumanState.Fall || Human.instance.state == HumanState.FreeFall));
 
 			//DebugMessage(string.Format("Speed Tracker is currently {0}.", pauseSpeedTracker ? "paused" : "going"), 0, false);
 
 			//if (!pauseSpeedTracker)
-			if (this.renderSpeed)
+			if (renderSpeed)
 			{
 				// set current speed
-				this.curSpeed = Mathf.Sqrt(Mathf.Pow(Human.instance.velocity.x, 2.0f) + Mathf.Pow(Human.instance.velocity.z, 2.0f));
+				curSpeed = Mathf.Sqrt(Mathf.Pow(Human.instance.velocity.x, 2.0f) + Mathf.Pow(Human.instance.velocity.z, 2.0f));
 				// set max speed
-				this.maxSpeedReached = (this.curSpeed > this.maxSpeedReached) ? this.curSpeed : this.maxSpeedReached;
+				maxSpeedReached = (curSpeed > maxSpeedReached) ? curSpeed : maxSpeedReached;
 				// set/shift average speeds down the array by 1 step
-				if (this.curSpeedIter == this.speedsOverTime.Length - 1)
+				if (curSpeedIter == speedsOverTime.Length - 1)
 				{
-					for (int i = 0; i < this.speedsOverTime.Length - 1; i++) // don't want to do the last element in the array, hence the - 1
-						this.speedsOverTime[i] = this.speedsOverTime[i + 1]; // effectively pushes out the oldest element of array and moves the placement of everything down by 1
+					for (int i = 0; i < speedsOverTime.Length - 1; i++) // don't want to do the last element in the array, hence the - 1
+						speedsOverTime[i] = speedsOverTime[i + 1]; // effectively pushes out the oldest element of array and moves the placement of everything down by 1
 				}
-				this.speedsOverTime[this.curSpeedIter] = this.curSpeed; // adds current speed to the array
-				this.curSpeedIter = (this.curSpeedIter < this.speedsOverTime.Length - 1) ? this.curSpeedIter + 1 : this.speedsOverTime.Length - 1; // increment until at the end of the array
+				speedsOverTime[curSpeedIter] = curSpeed; // adds current speed to the array
+				curSpeedIter = (curSpeedIter < speedsOverTime.Length - 1) ? curSpeedIter + 1 : speedsOverTime.Length - 1; // increment until at the end of the array
 			}
 
-			//DebugMessage("Current level: " + this.gameLevel.ToString());
-			if (this.gameLevel != Game.instance.currentLevelNumber)
+			//DebugMessage("Current level: " + gameLevel.ToString());
+			if (gameLevel != Game.instance.currentLevelNumber)
 			{
-				this.RenderLoadingZone(this.renderLoadingZone);
-				this.RenderCheckpoints(this.renderCheckpoints);
+				RenderLoadingZone(renderLoadingZone);
+				RenderCheckpoints(renderCheckpoints);
 
-				this.gameLevel = Game.instance.currentLevelNumber;
+				gameLevel = Game.instance.currentLevelNumber;
 			}
 
-			if (SpeedTools.CheatsActivated)
+			if (CheatsActivated)
 			{
-				//CheatCodes.cheatMode = false; // have to do this to make NotifyCheat work more than once
-				//CheatCodes.NotifyCheat("SpeedTools"); // enable "cheating" notification in top-right of screen
-				SubtitleManager.instance.SetProgress(string.Format(I2.Loc.ScriptLocalization.TUTORIAL.CHEAT, "SpeedTools")); // enable "cheating" notification in top-right of screen
+				// put message on-screen saying that using these tools during a speedrun will disqualify the run, or something similar
+				//SubtitleManager.instance.SetProgress(string.Format(I2.Loc.ScriptLocalization.TUTORIAL.CHEAT, "SpeedTools")); // enable "cheating" notification in top-right of screen
+				SubtitleManager.instance.SetSubtitle("While this message is on-screen, speedruns will be considered invalid.\nThis message appeared from enabling one of the Speedrun Tools.\nYou can get rid of this message by turning off the tools you enabled,\nthen restarting the level or proceeding to the next level.");
 			}
 		}
 	}
