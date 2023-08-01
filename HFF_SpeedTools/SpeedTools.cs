@@ -9,6 +9,8 @@ namespace HFF_SpeedTools
 {
 	using HumanAPI;
 	using System.Linq;
+	using System.Collections;
+	using System.Collections.Generic;
 	using UnityEngine;
 
 	[BepInPlugin("org.bepinex.plugins.humanfallflat.speedtools", "Speedrun-Practice Tools", "1.0.0.1")]
@@ -31,9 +33,9 @@ namespace HFF_SpeedTools
 		static bool CheatsActivated = false; // set to true when player uses any of these
 		private bool renderMenu;
 		private bool renderCheckpoints;
-        private bool renderLoadingZone;
+		private bool renderLoadingZone;
 		private bool renderAllHitboxes;
-        private bool renderDebug;
+		private bool renderDebug;
 		private bool renderSpeed;
 		private bool renderCpNum;
 
@@ -41,9 +43,9 @@ namespace HFF_SpeedTools
 		private string menuMessage;
 		private GameObject[] primitives;
 		private GameObject cubePrimitive, capsulePrimitive, spherePrimitive, meshPrimitive;
-		private GameObject[] checkpointVisuals;
-		private System.Collections.Generic.List<GameObject> hitboxVisuals;
-		private System.Collections.Generic.List<bool> rendererEnabledForHitboxes;
+		private List<GameObject> checkpointVisuals, hitboxVisuals;
+		private List<Checkpoint> checkpoints;
+		private List<bool> rendererEnabledForHitboxes;
 		private GameObject loadingZoneVisual;
 		private LevelPassTrigger curLoadingZone;
 
@@ -54,7 +56,7 @@ namespace HFF_SpeedTools
 
 		//private int curPage = 0;
 
-		public static System.Collections.ArrayList UndestroyedObjects = new System.Collections.ArrayList();
+		public static ArrayList UndestroyedObjects = new ArrayList();
 
 
 
@@ -131,10 +133,10 @@ namespace HFF_SpeedTools
 				"5) Reset Speedometer\n" +
 				//"6) Toggle firework launcher [{3}]"
 				"6) Toggle Checkpoint number display [{3}]\n" +
-                "7) Toggle Toggle hitbox Visual for all objects [{4}]\n" +
+				"7) Toggle Toggle hitbox Visual for all objects [{4}]\n" +
 
-                '\u2190' + ") Change framerate cap [{5}]"
-                , renderSpeed ? "ENABLED" : "DISABLED", renderCheckpoints ? "ENABLED" : "DISABLED", renderLoadingZone ? "ENABLED" : "DISABLED", renderCpNum ? "ENABLED" : "DISABLED", renderAllHitboxes ? "ENABLED" : "DISABLED", Application.targetFrameRate.ToString()) +
+				'\u2190' + ") Change framerate cap [{5}]"
+				, renderSpeed ? "ENABLED" : "DISABLED", renderCheckpoints ? "ENABLED" : "DISABLED", renderLoadingZone ? "ENABLED" : "DISABLED", renderCpNum ? "ENABLED" : "DISABLED", renderAllHitboxes ? "ENABLED" : "DISABLED", Application.targetFrameRate.ToString()) +
 				//(Fireworks.instance && Fireworks.instance.enableWeapons) ? "ENABLED" : "DISABLED") +
 
 				"\n" +
@@ -177,7 +179,6 @@ namespace HFF_SpeedTools
 			Collider collider = sourceObject.gameObject.GetComponent<Collider>();
 			GameObject hitboxVisual = null;
 
-			//if (boxCol)
 			if (collider)
 			{
 				if (collider is BoxCollider boxCol)
@@ -189,42 +190,40 @@ namespace HFF_SpeedTools
 				}
 				else if (collider is CapsuleCollider capsuleCol)
 				{
-					DebugMessage("Collider type is CapsuleCollider");
+					//DebugMessage("Collider type is CapsuleCollider");
 					hitboxVisual = Instantiate(capsulePrimitive);
 					hitboxVisual.transform.localScale = new Vector3(capsuleCol.radius * 2 * capsuleCol.transform.localScale.x, capsuleCol.height * capsuleCol.transform.localScale.y, capsuleCol.radius * 2 * capsuleCol.transform.localScale.z);
 					hitboxVisual.transform.SetParent(capsuleCol.transform, false);
 				}
 				else if (collider is SphereCollider sphereCol)
 				{
-					DebugMessage("Collider type is SphereCollider");
+					//DebugMessage("Collider type is SphereCollider");
 					hitboxVisual = Instantiate(spherePrimitive);
 					hitboxVisual.transform.localScale = Vector3.Scale(new Vector3(sphereCol.radius, sphereCol.radius, sphereCol.radius) * 2, sphereCol.transform.localScale);
 					hitboxVisual.transform.SetParent(sphereCol.transform, false);
 				}
 				else if (collider is MeshCollider meshCol)
 				{
-
-					hitboxVisual = Instantiate(cubePrimitive);
+					//hitboxVisual = Instantiate(cubePrimitive);
+					hitboxVisual = Instantiate(spherePrimitive);
 					Mesh ogMesh = meshCol.sharedMesh;
-					Mesh newMesh = new Mesh();
-					newMesh.vertices = ogMesh.vertices;
-					newMesh.triangles = ogMesh.triangles;
-					newMesh.uv = ogMesh.uv;
-					newMesh.normals = ogMesh.normals;
-					newMesh.colors = ogMesh.colors;
-					newMesh.tangents = ogMesh.tangents;
+					Mesh newMesh = new Mesh
+					{
+						vertices = ogMesh.vertices,
+						triangles = ogMesh.triangles,
+						uv = ogMesh.uv,
+						normals = ogMesh.normals,
+						colors = ogMesh.colors,
+						tangents = ogMesh.tangents,
+						name = "HitboxVisual"
+					};
 					hitboxVisual.GetComponent<MeshFilter>().mesh = newMesh;
 
-					//hitboxVisual.transform.localScale = sourceObject.transform.localScale;
 					hitboxVisual.transform.SetParent(sourceObject.transform, false);
-					//AssetDatabase.CreateAsset(newMesh, AssetDatabase.GetAssetPath(ogMesh) + "_HitboxVisual.asset");
-
-					//hitboxVisual = Instantiate(sourceObject.gameObject);
-					//hitboxVisual.transform.localScale *= 1.1f;
 				}
 				else
 				{
-					DebugMessage("Collider type is MeshCollider or something else or nonexistant");
+					DebugMessage("Collider type is something else or nonexistant");
 					hitboxVisual = Instantiate(cubePrimitive);
 					hitboxVisual.transform.localScale = sourceObject.transform.localScale;
 					hitboxVisual.transform.SetParent(sourceObject.transform, false);
@@ -236,15 +235,19 @@ namespace HFF_SpeedTools
 			return hitboxVisual;
 		}
 
-        private void RenderAllHitboxes(bool active)
-        {
-			//Shell.Print("about to check 'if active' in RenderHitboxVisuals");
-            //Shell.Print(string.Format("RenderAllHitboxes called with active={0}", active));
-            if (active)
+		private void RenderAllHitboxes(bool active)
+		{
+			CheatsActivated = active || CheatsActivated;
+
+			int amtNoRenderer, amtNoCollider;
+			amtNoRenderer = amtNoCollider = 0;
+			//DebugMessage("about to check 'if active' in RenderHitboxVisuals");
+			//DebugMessage(string.Format("RenderAllHitboxes called with active={0}", active));
+			if (active)
 			{
-				DebugMessage("RenderAllHitboxVisuals activated");
-				System.Collections.Generic.List<GameObject> levelObjects = FindObjectsOfType<GameObject>().ToList();
-				DebugMessage(string.Format("amount of GameObjects: {0}", levelObjects.Count));
+				//DebugMessage("RenderAllHitboxVisuals activated");
+				List<GameObject> levelObjects = FindObjectsOfType<GameObject>().ToList();
+				DebugMessage(string.Format("amount of GameObjects to check: {0}", levelObjects.Count));
 
 				for (int i = 0; i < levelObjects.Count; i++)
 				{
@@ -255,33 +258,44 @@ namespace HFF_SpeedTools
 						levelObjects.RemoveAt(i);
 					}
 				}
-                
+				
 				DebugMessage(string.Format("going to render {0} hitboxes", levelObjects.Count));
 				for (int i = 0; i < levelObjects.Count; i++)
 				{
-					DebugMessage("generating hitbox visual");
+					//DebugMessage("generating hitbox visual");
 					hitboxVisuals.Add(generateHitboxVisual(levelObjects[i]));
 					GameObject hitboxVisual = hitboxVisuals.Last();
-                    DebugMessage("getting renderer of hitboxVisual and setting color");
-					if (hitboxVisual)
+					//DebugMessage("getting renderer of hitboxVisual and setting color");
+					if (hitboxVisual && levelObjects[i].GetComponent<Renderer>())
 					{
-						float transparency = 1f;
-						Collider collider = hitboxVisual.GetComponent<Collider>();
-						if (collider != null)
-							transparency = collider.isTrigger ? 0.33f : transparency;
+						Color theColor = new Color(0.2f, 0.2f, 0.8f); // dark-ish blue
+						//float transparency = 1f;
+						//Renderer theRenderer = levelObjects[i].GetComponent<Renderer>();
+						//if (theRenderer)
+						//	transparency = theRenderer.material.color.a;
+						float transparency = levelObjects[i].GetComponent<Renderer>().material.color.a;
+						Collider collider = levelObjects[i].GetComponent<Collider>();
+						Renderer objRenderer = hitboxVisual.GetComponent<Renderer>();
 
-                        Renderer objRenderer = hitboxVisual.GetComponent<Renderer>();
-                        if (transparency == 1f)
+						//if (!collider)
+						//	DebugMessage("no collider found");
+						//else
+						//	DebugMessage("collider found");
+						if (collider && collider.isTrigger)
 						{
-							StandardShaderUtils.ChangeRenderMode(objRenderer.material, StandardShaderUtils.BlendMode.Opaque);
-
-							//objRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On; // so that it doesn't cast shadows on things
-							//objRenderer.receiveShadows = true;
+							theColor = new Color(1f, 0f, 0f); // red for triggers
+							transparency = 0.33f;
 						}
-                        objRenderer.material.SetColor("_Color", new Color(0.3f, 0.3f, 0.8f, transparency)); // dark-ish blue
+
+						if (transparency == 1f)
+							StandardShaderUtils.ChangeRenderMode(objRenderer.material, StandardShaderUtils.BlendMode.Opaque);
+						else if (transparency < 0.33f)
+							transparency = 0.33f;
+
+						objRenderer.material.SetColor("_Color", new Color(theColor.r, theColor.g, theColor.b, transparency));
 						hitboxVisual.SetActive(true);
 
-						DebugMessage("getting renderer of levelObject and getting renderer to store renderEnabled state");
+						//DebugMessage("getting renderer of levelObject and getting renderer to store renderEnabled state");
 						objRenderer = levelObjects[i].GetComponent<Renderer>();
 						if (objRenderer != null)
 						{
@@ -290,77 +304,108 @@ namespace HFF_SpeedTools
 						}
 						else
 						{
+							amtNoRenderer++;
 							Destroy(hitboxVisual);
 							hitboxVisuals.RemoveAt(hitboxVisuals.Count - 1);
 						}
 					}
 					else
 					{
-						DebugMessage(string.Format("hitboxVisual #{0} did not generate properly!", i));
+						//DebugMessage(string.Format("hitboxVisual #{0} did not generate properly!", i));
+						amtNoCollider++;
 						Destroy(hitboxVisual);
 						hitboxVisuals.RemoveAt(hitboxVisuals.Count - 1);
 					}
 				}
+				DebugMessage(string.Format("{0} objects had no renderer; {1} objects had no collider", amtNoRenderer, amtNoCollider));
 			}
 			else
 			{
 				DebugMessage(string.Format("Size of hitboxVisuals should be same size as rendererEnabledForHitboxes ({0} = {1})", hitboxVisuals.Count, rendererEnabledForHitboxes.Count));
 				for (int i = 0; i < hitboxVisuals.Count; i++)
 				{
-					//if (hitboxVisuals[i])
-					//{
-					if (hitboxVisuals[i].transform.parent != null)
+					if (hitboxVisuals[i]) // it's possible that a stored object has been Destroyed at this point
 					{
-						GameObject anObject = hitboxVisuals[i].transform.parent.gameObject;
-						if (anObject != null)
+						if (hitboxVisuals[i].transform.parent != null)
 						{
-							Renderer theRenderer = anObject.GetComponent<Renderer>();
-							if (theRenderer != null)
-								theRenderer.enabled = rendererEnabledForHitboxes[i];
+							GameObject anObject = hitboxVisuals[i].transform.parent.gameObject;
+							if (anObject != null)
+							{
+								Renderer theRenderer = anObject.GetComponent<Renderer>();
+								if (theRenderer != null)
+									theRenderer.enabled = rendererEnabledForHitboxes[i];
+							}
 						}
 					}
 				}
 
-                foreach (GameObject go in hitboxVisuals)
-                {
-                    Destroy(go);
-                }
-                Shell.Print("Destroyed all previous hitbox visuals");
+				foreach (GameObject go in hitboxVisuals)
+				{
+					Destroy(go);
+				}
+				DebugMessage("Destroyed all previous hitbox visuals");
 
-                hitboxVisuals.Clear();
+				hitboxVisuals.Clear();
 				rendererEnabledForHitboxes.Clear();
-            }
-        }
+			}
+		}
 
-        private void RenderCheckpoints(bool active)
+		private void RenderCheckpoints(bool active)
 		{
-            CheatsActivated = active || CheatsActivated;
-            Checkpoint[] lvlCPs = FindObjectsOfType<Checkpoint>();
+			CheatsActivated = active || CheatsActivated;
+			
 			// get rid of previous checkpoint visuals
 			foreach (GameObject go in checkpointVisuals)
 			{
 				Destroy(go);
 			}
-			checkpointVisuals.Initialize(); // reset array
-			//DebugMessage("Reset checkpointVisuals array");
+			checkpointVisuals.Clear(); // reset array
+									   //DebugMessage("Reset checkpointVisuals array");
 			if (active)
 			{
+				int amtBoxCheckpoints = 0;
+				Checkpoint[] lvlCPs = FindObjectsOfType<Checkpoint>();
 				for (int i = 0; i < lvlCPs.Length; i++)
 				{
-					if (lvlCPs[i].number != 0) // only generate visual if it's not the "first" checkpoint (where you spawn)
+					if (lvlCPs[i].number != 0) // ignore spawn checkpoint
 					{
+						/*
 						checkpointVisuals[i] = generateHitboxVisual(lvlCPs[i].gameObject);
 						checkpointVisuals[i].GetComponent<Renderer>().material.SetColor("_Color", new Color(1.0f, 0.66f, 0.0f, 0.33f)); // orange for checkpoints :)
 						checkpointVisuals[i].SetActive(true);
+
+						UICanvas canvas = checkpointVisuals[i].AddComponent<UICanvas>();
+
+						if (!canvas)
+							DebugMessage("canvas does not exist");
+						if (!canvas.gameObject)
+							DebugMessage("canvas.gameObject does not exist");
+						//GUIText checkpointNumText = canvas.gameObject.AddComponent<GUIText>();
+						//GUIText checkpointNumText = checkpointVisuals[i].AddComponent<GUIText>();
+						//checkpointNumText.fontSize = 48;
+						//checkpointNumText.text = string.Format("Checkpoint #{0}", lvlCPs[i].number);
+						*/
+						Collider collider = lvlCPs[i].gameObject.GetComponent<Collider>();
+						if (collider && collider is BoxCollider)
+						{
+							DebugMessage("found boxcollider checkpoint, adding");
+							amtBoxCheckpoints++;
+							checkpoints.Add(lvlCPs[i]);
+							//Gizmos.DrawCube(lvlCPs[i].gameObject.transform.position, Vector3.Scale(box.size, lvlCPs[i].gameObject.transform.localScale));
+						}
 					}
 				}
+				DebugMessage(string.Format("amount of checkpoints: {0}; amount of BoxCollider checkpoints: {1}", lvlCPs.Length, amtBoxCheckpoints));
 			}
+			else
+				checkpoints.Clear();
 		}
 
 		private void RenderLoadingZone(bool active)
 		{
-            CheatsActivated = active || CheatsActivated;
-            curLoadingZone = FindObjectOfType<LevelPassTrigger>();
+			CheatsActivated = active || CheatsActivated;
+
+			curLoadingZone = FindObjectOfType<LevelPassTrigger>();
 			// get rid of previous loading zone visual
 			if (loadingZoneVisual != null)
 				Destroy(loadingZoneVisual);
@@ -371,32 +416,32 @@ namespace HFF_SpeedTools
 			}
 		}
 
-        private void SetRenderAllHitboxes(string txt)
-        {
-            if (string.IsNullOrEmpty(txt))
-                renderAllHitboxes = !renderAllHitboxes; // toggles if no words after command
-            else
-            {
-                string[] words = txt.Split(new char[]
-                {
-                    ' '
-                }, System.StringSplitOptions.RemoveEmptyEntries);
+		private void SetRenderAllHitboxes(string txt)
+		{
+			if (string.IsNullOrEmpty(txt))
+				renderAllHitboxes = !renderAllHitboxes; // toggles if no words after command
+			else
+			{
+				string[] words = txt.Split(new char[]
+				{
+					' '
+				}, System.StringSplitOptions.RemoveEmptyEntries);
 
-                if (words.Length != 1)
-                    return;
+				if (words.Length != 1)
+					return;
 
-                if (int.TryParse(words[0], out int num))
-                    renderAllHitboxes = num != 0;
-                else if (words[0].ToLower() == "true")
-                    renderAllHitboxes = true;
-                else if (words[0].ToLower() == "false")
-                    renderAllHitboxes = false;
-            }
-            RenderAllHitboxes(renderAllHitboxes);
-            Shell.Print(string.Format("hitbox renderer {0}", renderAllHitboxes ? "enabled" : "disabled"));
-        }
+				if (int.TryParse(words[0], out int num))
+					renderAllHitboxes = num != 0;
+				else if (words[0].ToLower() == "true")
+					renderAllHitboxes = true;
+				else if (words[0].ToLower() == "false")
+					renderAllHitboxes = false;
+			}
+			RenderAllHitboxes(renderAllHitboxes);
+			Shell.Print(string.Format("hitbox renderer {0}", renderAllHitboxes ? "enabled" : "disabled"));
+		}
 
-        private void SetRenderCheckpoints(string txt)
+		private void SetRenderCheckpoints(string txt)
 		{
 			// NOTE TO SELF:
 			//	should make it so that CheatsActivated turns ON only if one of the cheats is actually on
@@ -449,7 +494,7 @@ namespace HFF_SpeedTools
 			Shell.Print(string.Format("loading zone hitbox renderer {0}", renderLoadingZone ? "enabled" : "disabled"));
 		}
 
-        private void SetDisplaySpeedometer(string txt)
+		private void SetDisplaySpeedometer(string txt)
 		{
 			if (string.IsNullOrEmpty(txt))
 				renderSpeed = !renderSpeed; // toggles if no words after command
@@ -541,9 +586,10 @@ namespace HFF_SpeedTools
 			primitives[2] = spherePrimitive;
 			primitives[3] = meshPrimitive;
 
-			checkpointVisuals = new GameObject[50];
-			hitboxVisuals = new System.Collections.Generic.List<GameObject>();
-			rendererEnabledForHitboxes = new System.Collections.Generic.List<bool>();
+			checkpoints = new List<Checkpoint>();
+			checkpointVisuals = new List<GameObject>();
+			hitboxVisuals = new List<GameObject>();
+			rendererEnabledForHitboxes = new List<bool>();
 
 			loadingZoneVisual = null;
 
@@ -594,6 +640,7 @@ namespace HFF_SpeedTools
 			//DebugMessage("Press \"NumPad-Enter\" to bring up the SpeedTools menu.\r\nAlternatively type \"help\" in console to see new console commands.\r\nNOTE: INVALIDATES SPEEDRUN IF USED; RESTART GAME WHEN DONE WITH PRACTICE", 16, false);
 			//SubtitleManager.instance.SetSubtitle("Press \"NumPad-Enter\" to bring up the SpeedTools menu.\nAlternatively type \"help\" in console to see new console commands.\nNOTE: INVALIDATES SPEEDRUN IF USED; RESTART GAME OR TURN OFF USED TOOLS THEN RESTART LEVEL WHEN DONE WITH PRACTICE", 16);
 
+			DebugMessage(string.Format("Unity version: {0}", Application.unityVersion));
 		}
 
 		private void OnGUI()
@@ -753,8 +800,30 @@ namespace HFF_SpeedTools
 			{
 				RenderLoadingZone(renderLoadingZone);
 				RenderCheckpoints(renderCheckpoints);
+				RenderAllHitboxes(false);
+				RenderAllHitboxes(renderAllHitboxes);
 
 				gameLevel = Game.instance.currentLevelNumber;
+			}
+
+			if (renderCheckpoints)
+			{
+				Checkpoint currentCheckpoint = null;
+				foreach (Checkpoint cp in FindObjectsOfType<Checkpoint>())
+				{
+					if (cp.number == Game.instance.currentCheckpointNumber)
+						currentCheckpoint = cp;
+				}
+				if (currentCheckpoint && Human.instance)
+					Debug.DrawLine(Human.instance.gameObject.transform.position, currentCheckpoint.gameObject.transform.position);
+				else
+					DebugMessage(string.Format("Exists? currentCheckpoint: {0}; Human.instance: {1}", currentCheckpoint != null, Human.instance != null));
+				//DebugMessage("trying to render checkpoint hitboxes");
+				//foreach (Checkpoint theCP in checkpoints)
+				//{
+				//	BoxCollider box = theCP.GetComponent<BoxCollider>();
+				//	Gizmos.DrawCube(theCP.gameObject.transform.position, Vector3.Scale(box.size, theCP.gameObject.transform.localScale));
+				//}
 			}
 
 			if (CheatsActivated)
